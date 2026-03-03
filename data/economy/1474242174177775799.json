@@ -1,0 +1,20 @@
+{
+  "users": {
+    "1029237611883155526": {
+      "balance": 19966,
+      "lastDaily": 1772439251207,
+      "lastWork": 1772439241867,
+      "wallet": 0,
+      "bank": 584,
+      "lastInterest": 1772439149408,
+      "lastCoinflip": 0,
+      "lastSlots": 0,
+      "inventory": {}
+    },
+    "331934853631049730": {
+      "balance": 100,
+      "lastDaily": 0,
+      "lastWork": 0
+    }
+  }
+}

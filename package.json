@@ -1,0 +1,25 @@
+{
+  "name": "discordbot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "bot": "node index.js",
+    "web": "cd web && npx next dev -p 3001",
+    "start": "concurrently \"npm run bot\" \"npm run web\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "discord.js": "^14.25.1",
+    "dotenv": "^17.3.1"
+  },
+  "directories": {
+    "lib": "lib"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

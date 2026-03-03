@@ -1,0 +1,35 @@
+const { SlashCommandBuilder } = require("discord.js");
+
+module.exports = {
+  data: new SlashCommandBuilder()
+    .setName("rps")
+    .setDescription("Rock paper scissors")
+    .addStringOption(o =>
+      o.setName("choice")
+        .setDescription("Your choice")
+        .setRequired(true)
+        .addChoices(
+          { name: "rock", value: "rock" },
+          { name: "paper", value: "paper" },
+          { name: "scissors", value: "scissors" }
+        )
+    ),
+
+  async execute(interaction) {
+    const userChoice = interaction.options.getString("choice");
+    const choices = ["rock", "paper", "scissors"];
+    const botChoice = choices[Math.floor(Math.random() * 3)];
+
+    let result = "It's a tie!";
+    if (
+      (userChoice === "rock" && botChoice === "scissors") ||
+      (userChoice === "paper" && botChoice === "rock") ||
+      (userChoice === "scissors" && botChoice === "paper")
+    ) result = "You win!";
+    else if (userChoice !== botChoice) result = "You lose!";
+
+    await interaction.reply(
+      `You chose **${userChoice}**\nI chose **${botChoice}**\n\n${result}`
+    );
+  },
+};

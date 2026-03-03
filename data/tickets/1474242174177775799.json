@@ -1,0 +1,31 @@
+{
+  "nextId": 2,
+  "settings": {
+    "categoryChannelId": "1474242174659858616",
+    "supportRoleId": "1474242174177775799",
+    "logChannelId": "1474242174659858618",
+    "ticketTypes": [
+      {
+        "id": "support",
+        "label": "Support",
+        "description": "General help"
+      },
+      {
+        "id": "bug",
+        "label": "Bug Report",
+        "description": "Report a problem"
+      },
+      {
+        "id": "purchase",
+        "label": "Purchase",
+        "description": "Payments / store"
+      },
+      {
+        "id": "other",
+        "label": "Other",
+        "description": "Something else"
+      }
+    ]
+  },
+  "openTickets": {}
+}
