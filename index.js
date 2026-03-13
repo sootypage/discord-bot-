@@ -1,218 +1,449 @@
 require("dotenv").config();
 
 const fs = require("fs");
+
 const path = require("path");
+
 const {
+
   Client,
+
   GatewayIntentBits,
+
   Partials,
-  REST,
-  Routes,
-  InteractionType,
+
+  Collection,
+
 } = require("discord.js");
 
-const { loadCommands } = require("./handlers/commandLoader");
 const { handleTicketComponent } = require("./tickets/ticketComponents");
 
 // Config (bad words)
+
 const { getConfig } = require("./lib/config");
 
 // Leveling
-const { readLevels, writeLevels, ensureUser, xpNeeded } = require("./lib/leveling");
+
+const {
+
+  readLevels,
+
+  writeLevels,
+
+  ensureUser,
+
+  xpNeeded,
+
+} = require("./lib/leveling");
 
 // ---- ENV checks ----
-if (!process.env.DISCORD_TOKEN) throw new Error("Missing DISCORD_TOKEN in .env");
-if (!process.env.CLIENT_ID) throw new Error("Missing CLIENT_ID in .env");
-if (!/^\d{17,20}$/.test(process.env.CLIENT_ID)) {
-  throw new Error("CLIENT_ID must be the numeric Application ID (a snowflake).");
+
+if (!process.env.DISCORD_TOKEN) {
+
+  throw new Error("Missing DISCORD_TOKEN in .env");
+
 }
 
-const GUILD_ID = process.env.GUILD_ID;
+const PREFIX = process.env.PREFIX || "!";
 
 // ---- Discord client ----
+
 const client = new Client({
+
   intents: [
+
     GatewayIntentBits.Guilds,
+
     GatewayIntentBits.GuildMembers,
 
-    // Needed for badword filter + XP
     GatewayIntentBits.GuildMessages,
+
     GatewayIntentBits.MessageContent,
+
   ],
+
   partials: [Partials.Channel, Partials.GuildMember],
+
 });
 
-// ---- Load commands from /commands (recursive) ----
+// ---- Load prefix commands from /commands (recursive) ----
+
+client.commands = new Collection();
+
+client.commandCategories = new Collection();
+
 const COMMANDS_DIR = path.join(__dirname, "commands");
-if (!fs.existsSync(COMMANDS_DIR)) fs.mkdirSync(COMMANDS_DIR, { recursive: true });
 
-const { commands: commandMap, commandData, categories } = loadCommands(COMMANDS_DIR);
+if (!fs.existsSync(COMMANDS_DIR)) {
 
-// expose to commands (used by /help dropdown)
-client.commands = commandMap;
-client.commandCategories = categories;
+  fs.mkdirSync(COMMANDS_DIR, { recursive: true });
 
-// ---- Register slash commands ----
-async function registerCommands() {
-  const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
-
-  if (GUILD_ID) {
-    await rest.put(Routes.applicationGuildCommands(process.env.CLIENT_ID, GUILD_ID), {
-      body: commandData,
-    });
-    console.log(`✅ Registered ${commandData.length} GUILD commands for ${GUILD_ID}`);
-  } else {
-    await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), {
-      body: commandData,
-    });
-    console.log(`✅ Registered ${commandData.length} GLOBAL commands (can take time to appear)`);
-  }
 }
 
-// ---- Events ----
+function loadPrefixCommands(dir) {
+
+  const files = fs.readdirSync(dir, { withFileTypes: true });
+
+  for (const file of files) {
+
+    const fullPath = path.join(dir, file.name);
+
+    if (file.isDirectory()) {
+
+      loadPrefixCommands(fullPath);
+
+      continue;
+
+    }
+
+    if (!file.name.endsWith(".js")) continue;
+
+    try {
+
+      delete require.cache[require.resolve(fullPath)];
+
+      const cmd = require(fullPath);
+
+      if (!cmd || typeof cmd !== "object") continue;
+
+      if (!cmd.name || typeof cmd.execute !== "function") {
+
+        console.warn(`⚠️ Skipped invalid command file: ${fullPath}`);
+
+        continue;
+
+      }
+
+      const commandName = String(cmd.name).toLowerCase();
+
+      client.commands.set(commandName, cmd);
+
+      if (Array.isArray(cmd.aliases)) {
+
+        for (const alias of cmd.aliases) {
+
+          client.commands.set(String(alias).toLowerCase(), cmd);
+
+        }
+
+      }
+
+      const category = cmd.category || "General";
+
+      if (!client.commandCategories.has(category)) {
+
+        client.commandCategories.set(category, []);
+
+      }
+
+      const current = client.commandCategories.get(category);
+
+      if (!current.includes(commandName)) {
+
+        current.push(commandName);
+
+      }
+
+    } catch (err) {
+
+      console.error(`❌ Failed to load command file ${fullPath}:`, err);
+
+    }
+
+  }
+
+}
+
+loadPrefixCommands(COMMANDS_DIR);
+
+// ---- Ready ----
+
 client.once("ready", () => {
+
   console.log(`✅ Logged in as ${client.user.tag}`);
-  console.log(`✅ Loaded ${commandMap.size} command files`);
+
+  console.log(`✅ Loaded ${client.commands.size} command entries`);
+
+  console.log(`✅ Prefix is ${PREFIX}`);
+
 });
+
+// ---- Helper ----
 
 function randInt(min, max) {
+
   const a = Number(min);
+
   const b = Number(max);
+
   const lo = Number.isFinite(a) ? a : 5;
+
   const hi = Number.isFinite(b) ? b : 20;
+
   const m = Math.min(lo, hi);
+
   const M = Math.max(lo, hi);
+
   return Math.floor(Math.random() * (M - m + 1)) + m;
+
 }
 
-// ---- Message handler: Badwords + XP ----
+// ---- Message handler: Badwords + XP + Prefix Commands ----
+
 client.on("messageCreate", async (message) => {
+
   try {
+
     if (!message.guild) return;
+
     if (message.author.bot) return;
 
     // 1) BAD WORD FILTER
+
     const cfg = getConfig(message.guild.id);
+
     const list = Array.isArray(cfg.badWords) ? cfg.badWords : [];
 
-    if (list.length && typeof message.content === "string" && message.content.length) {
+    if (
+
+      list.length &&
+
+      typeof message.content === "string" &&
+
+      message.content.length
+
+    ) {
+
       const content = message.content.toLowerCase();
 
-      // simple contains match
       const hit = list.some((w) => {
+
         const word = String(w || "").trim().toLowerCase();
+
         return word && content.includes(word);
+
       });
 
       if (hit) {
+
         await message.delete().catch(() => {});
-        // stop here; don't grant XP for badword messages
+
         return;
+
       }
+
     }
 
-    // 2) XP SYSTEM (file-based, configurable)
+    // 2) XP SYSTEM
+
     const data = readLevels(message.guild.id);
 
-    // NEW structure: data.settings
     const settings = data.settings || {};
+
     const u = ensureUser(data, message.author.id);
 
     const now = Date.now();
+
     const cooldown = Number(settings.cooldownMs ?? 60000);
 
-    if (now - u.lastMessage < cooldown) return;
-    u.lastMessage = now;
+    if (now - u.lastMessage >= cooldown) {
 
-    const gained = randInt(settings.xpMin ?? 5, settings.xpMax ?? 20);
-    u.xp += gained;
+      u.lastMessage = now;
 
-    let leveledUp = false;
-    while (u.xp >= xpNeeded(u.level)) {
-      u.xp -= xpNeeded(u.level);
-      u.level++;
-      leveledUp = true;
-    }
+      const gained = randInt(settings.xpMin ?? 5, settings.xpMax ?? 20);
 
-    writeLevels(message.guild.id, data);
+      u.xp += gained;
 
-    if (leveledUp) {
-      // Give XP roles (levelRoles: [{ level: 5, roleId: "..." }])
-      const levelRoles = Array.isArray(settings.levelRoles) ? settings.levelRoles : [];
-      if (levelRoles.length) {
-        const member = await message.guild.members.fetch(message.author.id).catch(() => null);
-        if (member) {
-          const rolesToGive = levelRoles
-            .filter((r) => Number(r.level) <= u.level && /^\d{17,20}$/.test(String(r.roleId || "")))
-            .map((r) => String(r.roleId));
+      let leveledUp = false;
 
-          for (const roleId of rolesToGive) {
-            if (!member.roles.cache.has(roleId)) {
-              await member.roles.add(roleId).catch(() => {});
-            }
-          }
-        }
+      while (u.xp >= xpNeeded(u.level)) {
+
+        u.xp -= xpNeeded(u.level);
+
+        u.level++;
+
+        leveledUp = true;
+
       }
 
-      const levelChannelId = settings.levelChannelId;
-      const channel =
-        levelChannelId
+      writeLevels(message.guild.id, data);
+
+      if (leveledUp) {
+
+        const levelRoles = Array.isArray(settings.levelRoles)
+
+          ? settings.levelRoles
+
+          : [];
+
+        if (levelRoles.length) {
+
+          const member = await message.guild.members
+
+            .fetch(message.author.id)
+
+            .catch(() => null);
+
+          if (member) {
+
+            const rolesToGive = levelRoles
+
+              .filter(
+
+                (r) =>
+
+                  Number(r.level) <= u.level &&
+
+                  /^\d{17,20}$/.test(String(r.roleId || ""))
+
+              )
+
+              .map((r) => String(r.roleId));
+
+            for (const roleId of rolesToGive) {
+
+              if (!member.roles.cache.has(roleId)) {
+
+                await member.roles.add(roleId).catch(() => {});
+
+              }
+
+            }
+
+          }
+
+        }
+
+        const levelChannelId = settings.levelChannelId;
+
+        const channel = levelChannelId
+
           ? message.guild.channels.cache.get(levelChannelId)
+
           : message.channel;
 
-      channel?.send(`🎉 ${message.author} leveled up to **Level ${u.level}**!`);
+        channel
+
+          ?.send(`🎉 ${message.author} leveled up to **Level ${u.level}**!`)
+
+          .catch(() => {});
+
+      }
+
     }
+
+    // 3) PREFIX COMMANDS
+
+    if (!message.content.startsWith(PREFIX)) return;
+
+    const args = message.content
+
+      .slice(PREFIX.length)
+
+      .trim()
+
+      .split(/\s+/);
+
+    const commandName = (args.shift() || "").toLowerCase();
+
+    if (!commandName) return;
+
+    const command = client.commands.get(commandName);
+
+    if (!command) return;
+
+    try {
+
+      await command.execute(message, args, client);
+
+    } catch (err) {
+
+      console.error(`❌ ${PREFIX}${commandName} error:`, err);
+
+      await message.reply("❌ Error running that command.").catch(() => {});
+
+    }
+
   } catch (err) {
-    console.error("❌ messageCreate (badwords/xp) error:", err);
+
+    console.error("❌ messageCreate error:", err);
+
   }
+
 });
 
-// ---- Interaction router ----
+// ---- Interaction router (tickets + help dropdown) ----
+
 client.on("interactionCreate", async (interaction) => {
+
   try {
-    // Slash commands
-    if (interaction.type === InteractionType.ApplicationCommand && interaction.isChatInputCommand()) {
-      const cmd = client.commands.get(interaction.commandName);
-      if (!cmd) return;
 
-      try {
-        await cmd.execute(interaction);
-      } catch (err) {
-        console.error(`❌ /${interaction.commandName} error:`, err);
-        const msg = "❌ Error running that command.";
-        if (interaction.deferred || interaction.replied) {
-          await interaction.followUp({ content: msg, ephemeral: true }).catch(() => {});
-        } else {
-          await interaction.reply({ content: msg, ephemeral: true }).catch(() => {});
-        }
-      }
-      return;
-    }
-
-    // Tickets dropdown + close button
     if (interaction.isStringSelectMenu() || interaction.isButton()) {
+
       const handled = await handleTicketComponent(interaction);
+
       if (handled) return;
 
-      // Help dropdown
-      if (interaction.isStringSelectMenu() && interaction.customId === "help_category_select") {
+      if (
+
+        interaction.isStringSelectMenu() &&
+
+        interaction.customId === "help_category_select"
+
+      ) {
+
         const category = interaction.values[0];
-        const names = client.commandCategories.get(category) ?? [];
-        const lines = names.map((n) => `/${n}`).join("\n") || "No commands.";
+
+        const names = interaction.client.commandCategories.get(category) ?? [];
+
+        const lines =
+
+          names.map((n) => `${PREFIX}${n}`).join("\n") || "No commands.";
 
         return interaction.reply({
+
           content: `📂 **${category}** commands:\n\`\`\`\n${lines}\n\`\`\``,
+
           ephemeral: true,
+
         });
+
       }
+
     }
+
   } catch (err) {
+
     console.error("❌ interactionCreate router error:", err);
+
   }
+
+});
+
+// ---- Extra error handling ----
+
+client.on("error", (err) => {
+
+  console.error("❌ Client error:", err);
+
+});
+
+process.on("unhandledRejection", (reason) => {
+
+  console.error("❌ Unhandled promise rejection:", reason);
+
+});
+
+process.on("uncaughtException", (err) => {
+
+  console.error("❌ Uncaught exception:", err);
+
 });
 
 // ---- Start ----
+
 (async () => {
-  await registerCommands();
+
   await client.login(process.env.DISCORD_TOKEN);
+
 })();
