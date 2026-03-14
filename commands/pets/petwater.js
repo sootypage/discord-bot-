@@ -1,4 +1,4 @@
-const { readEconomy, writeEconomy } = require("../../lib/economy");
+const { readEcon, writeEcon, ensureUser } = require("../../lib/economy");
 
 module.exports = {
   name: "petwater",
@@ -6,20 +6,20 @@ module.exports = {
   aliases: ["petdrink"],
 
   async execute(message) {
-    const data = readEconomy(message.guild.id);
-    const user = data.users?.[message.author.id];
+    const data = readEcon(message.guild.id);
+    const u = ensureUser(data, message.author.id);
 
-    if (!user?.pet) return message.reply("❌ You do not have a pet.");
-    if (!user.pet.alive) return message.reply("💀 Your pet is dead. Use `!petrevive`.");
+    if (!u.pet) return message.reply("❌ You do not have a pet.");
+    if (!u.pet.alive) return message.reply("💀 Your pet is dead. Use `!petrevive`.");
 
-    user.pet.water = Math.min(100, (user.pet.water || 0) + 25);
-    user.pet.hp = Math.min(user.pet.maxHp || 100, (user.pet.hp || 0) + 5);
-    user.pet.xp = (user.pet.xp || 0) + 5;
+    u.pet.water = Math.min(100, (u.pet.water || 0) + 25);
+    u.pet.hp = Math.min(u.pet.maxHp || 100, (u.pet.hp || 0) + 5);
+    u.pet.xp = (u.pet.xp || 0) + 5;
 
-    writeEconomy(message.guild.id, data);
+    writeEcon(message.guild.id, data);
 
     return message.reply(
-      `💧 You gave water to your **${user.pet.name}**.\nWater: **${user.pet.water}/100**\nHP: **${user.pet.hp}/${user.pet.maxHp}**`
+      `💧 You gave water to your **${u.pet.type}**.\nWater: **${u.pet.water}/100**\nHP: **${u.pet.hp}/${u.pet.maxHp}**`
     );
   },
 };
