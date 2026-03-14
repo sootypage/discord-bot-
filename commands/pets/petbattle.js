@@ -1,4 +1,4 @@
-const { readEconomy, writeEconomy } = require("../../lib/economy");
+const { readEcon, writeEcon, ensureUser } = require("../../lib/economy");
 
 function levelUpPet(pet) {
   let needed = (pet.level || 1) * 50;
@@ -14,67 +14,61 @@ function levelUpPet(pet) {
 module.exports = {
   name: "petbattle",
   category: "Pets",
-  aliases: ["petfight"],
+  aliases: ["petfight", "petbuttle"],
 
   async execute(message) {
     const opponent = message.mentions.users.first();
     if (!opponent) return message.reply("Usage: !petbattle @user");
+    if (opponent.id === message.author.id) return message.reply("❌ You cannot battle yourself.");
 
-    if (opponent.id === message.author.id) {
-      return message.reply("❌ You cannot battle yourself.");
-    }
+    const data = readEcon(message.guild.id);
+    const u1 = ensureUser(data, message.author.id);
+    const u2 = ensureUser(data, opponent.id);
 
-    const data = readEconomy(message.guild.id);
-    const user1 = data.users?.[message.author.id];
-    const user2 = data.users?.[opponent.id];
-
-    if (!user1?.pet) return message.reply("❌ You do not have a pet.");
-    if (!user2?.pet) return message.reply("❌ That user does not have a pet.");
-
-    if (!user1.pet.alive) return message.reply("💀 Your pet is dead. Use `!petrevive`.");
-    if (!user2.pet.alive) return message.reply("💀 That user's pet is dead.");
+    if (!u1.pet) return message.reply("❌ You do not have a pet.");
+    if (!u2.pet) return message.reply("❌ That user does not have a pet.");
+    if (!u1.pet.alive) return message.reply("💀 Your pet is dead. Use `!petrevive`.");
+    if (!u2.pet.alive) return message.reply("💀 That user's pet is dead.");
 
     const p1Power =
-      (user1.pet.level || 1) * 10 +
-      (user1.pet.hp || 0) +
+      (u1.pet.level || 1) * 10 +
+      (u1.pet.hp || 0) +
       Math.floor(Math.random() * 30);
 
     const p2Power =
-      (user2.pet.level || 1) * 10 +
-      (user2.pet.hp || 0) +
+      (u2.pet.level || 1) * 10 +
+      (u2.pet.hp || 0) +
       Math.floor(Math.random() * 30);
 
     let result = "";
 
     if (p1Power >= p2Power) {
-      user1.pet.wins = (user1.pet.wins || 0) + 1;
-      user2.pet.losses = (user2.pet.losses || 0) + 1;
+      u1.pet.wins = (u1.pet.wins || 0) + 1;
+      u2.pet.losses = (u2.pet.losses || 0) + 1;
+      u1.pet.xp = (u1.pet.xp || 0) + 25;
+      u2.pet.hp = Math.max(0, (u2.pet.hp || 0) - 20);
+      if (u2.pet.hp <= 0) u2.pet.alive = false;
 
-      user1.pet.xp = (user1.pet.xp || 0) + 25;
-      user2.pet.hp = Math.max(0, (user2.pet.hp || 0) - 20);
-      if (user2.pet.hp <= 0) user2.pet.alive = false;
-
-      levelUpPet(user1.pet);
+      levelUpPet(u1.pet);
 
       result =
-        `🏆 **${message.author.username}'s ${user1.pet.name}** won!\n` +
-        `Loser HP: **${user2.pet.hp}/${user2.pet.maxHp}**`;
+        `🏆 **${message.author.username}'s ${u1.pet.type}** won!\n` +
+        `${opponent.username}'s pet HP: **${u2.pet.hp}/${u2.pet.maxHp}**`;
     } else {
-      user2.pet.wins = (user2.pet.wins || 0) + 1;
-      user1.pet.losses = (user1.pet.losses || 0) + 1;
+      u2.pet.wins = (u2.pet.wins || 0) + 1;
+      u1.pet.losses = (u1.pet.losses || 0) + 1;
+      u2.pet.xp = (u2.pet.xp || 0) + 25;
+      u1.pet.hp = Math.max(0, (u1.pet.hp || 0) - 20);
+      if (u1.pet.hp <= 0) u1.pet.alive = false;
 
-      user2.pet.xp = (user2.pet.xp || 0) + 25;
-      user1.pet.hp = Math.max(0, (user1.pet.hp || 0) - 20);
-      if (user1.pet.hp <= 0) user1.pet.alive = false;
-
-      levelUpPet(user2.pet);
+      levelUpPet(u2.pet);
 
       result =
-        `💀 **${opponent.username}'s ${user2.pet.name}** won!\n` +
-        `Your pet HP: **${user1.pet.hp}/${user1.pet.maxHp}**`;
+        `💀 **${opponent.username}'s ${u2.pet.type}** won!\n` +
+        `Your pet HP: **${u1.pet.hp}/${u1.pet.maxHp}**`;
     }
 
-    writeEconomy(message.guild.id, data);
+    writeEcon(message.guild.id, data);
     return message.reply(result);
   },
 };
