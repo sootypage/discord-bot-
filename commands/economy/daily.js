@@ -1,30 +1,28 @@
-const { SlashCommandBuilder } = require("discord.js");
 const { readEcon, writeEcon, ensureUser, clampMoney, formatMoney } = require("../../lib/economy");
 
 const DAILY_AMOUNT = 500;
 const DAILY_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
 module.exports = {
-  data: new SlashCommandBuilder().setName("daily").setDescription("Claim your daily money (24h cooldown)"),
+  name: "daily",
+  category: "Economy",
+  aliases: [],
 
-  async execute(interaction) {
+  async execute(message) {
     const now = Date.now();
-    const econ = readEcon(interaction.guildId);
-    const u = ensureUser(econ, interaction.user.id);
+    const econ = readEcon(message.guild.id);
+    const u = ensureUser(econ, message.author.id);
 
-    const next = u.lastDaily + DAILY_COOLDOWN_MS;
+    const next = (u.lastDaily || 0) + DAILY_COOLDOWN_MS;
     if (now < next) {
       const mins = Math.ceil((next - now) / 60000);
-      return interaction.reply({ content: `⏳ You already claimed daily. Try again in **${mins} min**.`, ephemeral: true });
+      return message.reply(`⏳ You already claimed daily. Try again in **${mins} min**.`);
     }
 
     u.lastDaily = now;
     u.wallet = clampMoney(u.wallet + DAILY_AMOUNT);
-    writeEcon(interaction.guildId, econ);
+    writeEcon(message.guild.id, econ);
 
-    await interaction.reply({
-      content: `✅ You claimed **$${formatMoney(DAILY_AMOUNT)}**. Wallet: **$${formatMoney(u.wallet)}**`,
-      ephemeral: true,
-    });
+    await message.reply(`✅ You claimed **$${formatMoney(DAILY_AMOUNT)}**. Wallet: **$${formatMoney(u.wallet)}**`);
   },
 };

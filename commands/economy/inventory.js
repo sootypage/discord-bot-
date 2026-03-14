@@ -1,23 +1,21 @@
-const { SlashCommandBuilder } = require("discord.js");
 const { readEcon, ensureUser, getShopItems } = require("../../lib/economy");
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName("inventory")
-    .setDescription("View your inventory")
-    .addUserOption((o) => o.setName("user").setDescription("User to view").setRequired(false)),
+  name: "inventory",
+  category: "Economy",
+  aliases: ["inv"],
 
-  async execute(interaction) {
-    const user = interaction.options.getUser("user") ?? interaction.user;
+  async execute(message) {
+    const user = message.mentions.users.first() || message.author;
 
-    const econ = readEcon(interaction.guildId);
+    const econ = readEcon(message.guild.id);
     const u = ensureUser(econ, user.id);
 
     const inv = u.inventory || {};
     const entries = Object.entries(inv);
 
     if (entries.length === 0) {
-      return interaction.reply({ content: `🎒 **${user.tag}** has nothing in their inventory.`, ephemeral: true });
+      return message.reply(`🎒 **${user.tag}** has nothing in their inventory.`);
     }
 
     const shop = getShopItems();
@@ -28,6 +26,6 @@ module.exports = {
       .slice(0, 30)
       .map(([id, qty]) => `${nameOf(id)} (${id}) — x${qty}`);
 
-    await interaction.reply({ content: `🎒 **${user.tag} Inventory**\n\`\`\`\n${lines.join("\n")}\n\`\`\``, ephemeral: true });
+    await message.reply(`🎒 **${user.tag} Inventory**\n\`\`\`\n${lines.join("\n")}\n\`\`\``);
   },
 };

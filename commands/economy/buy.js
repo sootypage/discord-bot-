@@ -1,34 +1,38 @@
-const { SlashCommandBuilder } = require("discord.js");
 const { readEcon, writeEcon, ensureUser, clampMoney, formatMoney, findShopItem, addItem } = require("../../lib/economy");
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName("buy")
-    .setDescription("Buy an item from the shop")
-    .addStringOption((o) => o.setName("item_id").setDescription("Item id from /shop").setRequired(true))
-    .addIntegerOption((o) => o.setName("qty").setDescription("Quantity").setMinValue(1).setRequired(false)),
+  name: "buy",
+  category: "Economy",
+  aliases: [],
 
-  async execute(interaction) {
-    const itemId = interaction.options.getString("item_id");
-    const qty = interaction.options.getInteger("qty") ?? 1;
+  async execute(message, args) {
+    const itemId = String(args[0] || "").toLowerCase();
+    const qty = Number(args[1] || 1);
+
+    if (!itemId) {
+      return message.reply("❌ Use `!buy <item_id> [qty]`.");
+    }
+    if (!Number.isInteger(qty) || qty < 1) {
+      return message.reply("❌ Quantity must be a whole number above 0.");
+    }
 
     const item = findShopItem(itemId);
-    if (!item) return interaction.reply({ content: "❌ Unknown item. Use `/shop` to see item ids.", ephemeral: true });
+    if (!item) {
+      return message.reply("❌ Unknown item. Use `!shop` to see item ids.");
+    }
 
     const cost = item.price * qty;
-
-    const econ = readEcon(interaction.guildId);
-    const u = ensureUser(econ, interaction.user.id);
+    const econ = readEcon(message.guild.id);
+    const u = ensureUser(econ, message.author.id);
 
     if (u.wallet < cost) {
-      return interaction.reply({ content: `❌ Not enough money. Cost: **$${formatMoney(cost)}** | Wallet: **$${formatMoney(u.wallet)}**`, ephemeral: true });
+      return message.reply(`❌ Not enough money. Cost: **$${formatMoney(cost)}** | Wallet: **$${formatMoney(u.wallet)}**`);
     }
 
     u.wallet = clampMoney(u.wallet - cost);
     addItem(u, item.id, qty);
+    writeEcon(message.guild.id, econ);
 
-    writeEcon(interaction.guildId, econ);
-
-    await interaction.reply({ content: `✅ Bought **${qty}x ${item.name}** for **$${formatMoney(cost)}**. Wallet: **$${formatMoney(u.wallet)}**`, ephemeral: true });
+    await message.reply(`✅ Bought **${qty}x ${item.name}** for **$${formatMoney(cost)}**. Wallet: **$${formatMoney(u.wallet)}**`);
   },
 };

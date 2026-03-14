@@ -1,4 +1,3 @@
-const { SlashCommandBuilder } = require("discord.js");
 const { readEcon, writeEcon, ensureUser, clampMoney, formatMoney } = require("../../lib/economy");
 
 const WORK_MIN = 50;
@@ -10,28 +9,26 @@ function randInt(min, max) {
 }
 
 module.exports = {
-  data: new SlashCommandBuilder().setName("work").setDescription("Work for some money (10m cooldown)"),
+  name: "work",
+  category: "Economy",
+  aliases: [],
 
-  async execute(interaction) {
+  async execute(message) {
     const now = Date.now();
-    const econ = readEcon(interaction.guildId);
-    const u = ensureUser(econ, interaction.user.id);
+    const econ = readEcon(message.guild.id);
+    const u = ensureUser(econ, message.author.id);
 
-    const next = u.lastWork + WORK_COOLDOWN_MS;
+    const next = (u.lastWork || 0) + WORK_COOLDOWN_MS;
     if (now < next) {
       const mins = Math.ceil((next - now) / 60000);
-      return interaction.reply({ content: `⏳ You’re tired. Try again in **${mins} min**.`, ephemeral: true });
+      return message.reply(`⏳ You’re tired. Try again in **${mins} min**.`);
     }
 
     const earned = randInt(WORK_MIN, WORK_MAX);
     u.lastWork = now;
     u.wallet = clampMoney(u.wallet + earned);
+    writeEcon(message.guild.id, econ);
 
-    writeEcon(interaction.guildId, econ);
-
-    await interaction.reply({
-      content: `🛠️ You worked and earned **$${formatMoney(earned)}**. Wallet: **$${formatMoney(u.wallet)}**`,
-      ephemeral: true,
-    });
+    await message.reply(`🛠️ You worked and earned **$${formatMoney(earned)}**. Wallet: **$${formatMoney(u.wallet)}**`);
   },
 };

@@ -1,4 +1,3 @@
-const { SlashCommandBuilder } = require("discord.js");
 const { readEcon, writeEcon, ensureUser, clampMoney, formatMoney } = require("../../lib/economy");
 
 const COOLDOWN_MS = 45 * 1000;
@@ -13,35 +12,38 @@ function spin() {
 }
 
 function payoutMultiplier(a, b, c) {
-  // 3 of a kind big payout
   if (a === b && b === c) {
     if (a === "💎") return 10;
     if (a === "⭐") return 6;
     return 4;
   }
-  // 2 of a kind small payout
   if (a === b || b === c || a === c) return 2;
   return 0;
 }
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName("slots")
-    .setDescription("Play slots")
-    .addIntegerOption((o) => o.setName("bet").setDescription("Bet amount").setMinValue(1).setRequired(true)),
+  name: "slots",
+  category: "Economy",
+  aliases: [],
 
-  async execute(interaction) {
-    const bet = interaction.options.getInteger("bet");
+  async execute(message, args) {
+    const bet = Number(args[0]);
     const now = Date.now();
 
-    const econ = readEcon(interaction.guildId);
-    const u = ensureUser(econ, interaction.user.id);
-
-    if (now < u.lastSlots + COOLDOWN_MS) {
-      const s = Math.ceil((u.lastSlots + COOLDOWN_MS - now) / 1000);
-      return interaction.reply({ content: `⏳ Cooldown: **${s}s**`, ephemeral: true });
+    if (!Number.isInteger(bet) || bet < 1) {
+      return message.reply("❌ Use `!slots <bet>`.");
     }
-    if (u.wallet < bet) return interaction.reply({ content: `❌ Not enough wallet funds. Wallet: **$${formatMoney(u.wallet)}**`, ephemeral: true });
+
+    const econ = readEcon(message.guild.id);
+    const u = ensureUser(econ, message.author.id);
+
+    if (now < (u.lastSlots || 0) + COOLDOWN_MS) {
+      const s = Math.ceil((((u.lastSlots || 0) + COOLDOWN_MS) - now) / 1000);
+      return message.reply(`⏳ Cooldown: **${s}s**`);
+    }
+    if (u.wallet < bet) {
+      return message.reply(`❌ Not enough wallet funds. Wallet: **$${formatMoney(u.wallet)}**`);
+    }
 
     u.lastSlots = now;
 
@@ -50,18 +52,14 @@ module.exports = {
 
     if (mult === 0) {
       u.wallet = clampMoney(u.wallet - bet);
-      writeEcon(interaction.guildId, econ);
-      return interaction.reply({ content: `🎰 ${a} ${b} ${c}\nYou lost **$${formatMoney(bet)}**.\nWallet: **$${formatMoney(u.wallet)}**`, ephemeral: true });
+      writeEcon(message.guild.id, econ);
+      return message.reply(`🎰 ${a} ${b} ${c}\nYou lost **$${formatMoney(bet)}**.\nWallet: **$${formatMoney(u.wallet)}**`);
     }
 
     const win = bet * mult;
-    // net profit: you keep your bet and gain win-bet? we’ll do: win includes profit; simplest: add win
     u.wallet = clampMoney(u.wallet + win);
-    writeEcon(interaction.guildId, econ);
+    writeEcon(message.guild.id, econ);
 
-    return interaction.reply({
-      content: `🎰 ${a} ${b} ${c}\nYou won **$${formatMoney(win)}** (**x${mult}**)!\nWallet: **$${formatMoney(u.wallet)}**`,
-      ephemeral: true,
-    });
+    return message.reply(`🎰 ${a} ${b} ${c}\nYou won **$${formatMoney(win)}** (**x${mult}**)\nWallet: **$${formatMoney(u.wallet)}**`);
   },
 };
