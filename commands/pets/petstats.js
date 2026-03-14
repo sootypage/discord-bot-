@@ -1,5 +1,5 @@
 const { EmbedBuilder } = require("discord.js");
-const { readEconomy } = require("../../lib/economy");
+const { readEcon, ensureUser } = require("../../lib/economy");
 
 module.exports = {
   name: "petstats",
@@ -7,19 +7,19 @@ module.exports = {
   aliases: ["pet", "mypet"],
 
   async execute(message) {
-    const data = readEconomy(message.guild.id);
-    const user = data.users?.[message.author.id];
+    const data = readEcon(message.guild.id);
+    const u = ensureUser(data, message.author.id);
 
-    if (!user?.pet) return message.reply("❌ You do not have a pet.");
+    if (!u.pet) return message.reply("❌ You do not have a pet.");
 
-    const pet = user.pet;
+    const pet = u.pet;
     const nextLevelXp = (pet.level || 1) * 50;
 
     const embed = new EmbedBuilder()
       .setColor(0x00b894)
       .setTitle(`🐾 ${message.author.username}'s Pet`)
       .addFields(
-        { name: "Pet Type", value: String(pet.name || "Unknown"), inline: true },
+        { name: "Pet Type", value: String(pet.type || "Unknown"), inline: true },
         { name: "Status", value: pet.alive ? "Alive ✅" : "Dead 💀", inline: true },
         { name: "Level", value: String(pet.level || 1), inline: true },
         { name: "HP", value: `${pet.hp || 0}/${pet.maxHp || 100}`, inline: true },
