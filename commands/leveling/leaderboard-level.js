@@ -1,28 +1,27 @@
-const { SlashCommandBuilder } = require("discord.js");
 const { readLevels } = require("../../lib/leveling");
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName("leaderboard-level")
-    .setDescription("Top levels in this server"),
+  name: "leaderboard",
+  category: "Leveling",
+  aliases: ["leaderboard-level", "leveltop", "xptop"],
 
-  async execute(interaction) {
-    const data = readLevels(interaction.guildId);
+  async execute(message) {
+    const data = readLevels(message.guild.id);
+    const users = data.users || {};
 
-    const sorted = Object.entries(data.users)
-      .sort((a, b) => b[1].level - a[1].level)
+    const sorted = Object.entries(users)
+      .sort((a, b) => {
+        const levelDiff = (b[1].level || 0) - (a[1].level || 0);
+        if (levelDiff !== 0) return levelDiff;
+        return (b[1].xp || 0) - (a[1].xp || 0);
+      })
       .slice(0, 10);
 
-    if (sorted.length === 0)
-      return interaction.reply({ content: "No level data yet.", ephemeral: true });
+    if (sorted.length === 0) {
+      return message.reply("No level data yet.");
+    }
 
-    const lines = sorted.map(
-      ([id, u], i) => `${i + 1}. <@${id}> — Level ${u.level}`
-    );
-
-    await interaction.reply({
-      content: `🏆 **Level Leaderboard**\n\`\`\`\n${lines.join("\n")}\n\`\`\``,
-      ephemeral: true,
-    });
+    const lines = sorted.map(([id, u], i) => `${i + 1}. <@${id}> — Level ${u.level} (${u.xp} XP)`);
+    await message.reply(`🏆 **Level Leaderboard**\n\`\`\`\n${lines.join("\n")}\n\`\`\``);
   },
 };

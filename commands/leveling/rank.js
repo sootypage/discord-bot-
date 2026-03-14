@@ -1,24 +1,20 @@
-const { SlashCommandBuilder } = require("discord.js");
 const { readLevels, ensureUser } = require("../../lib/leveling");
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName("rank")
-    .setDescription("Check your level")
-    .addUserOption(o => o.setName("user").setDescription("User").setRequired(false)),
+  name: "rank",
+  category: "Leveling",
+  aliases: ["level"],
 
-  async execute(interaction) {
-    const user = interaction.options.getUser("user") ?? interaction.user;
+  async execute(message) {
+    const user = message.mentions.users.first() || message.author;
 
-    const data = readLevels(interaction.guildId);
+    const data = readLevels(message.guild.id);
     const u = ensureUser(data, user.id);
 
-    await interaction.reply({
-      content:
-        `📊 **${user.tag}**\n` +
-        `Level: **${u.level}**\n` +
-        `XP: **${u.xp}**`,
-      ephemeral: true,
-    });
+    await message.reply(
+      `📊 **${user.tag}**\n` +
+      `Level: **${u.level}**\n` +
+      `XP: **${u.xp}**`
+    );
   },
 };

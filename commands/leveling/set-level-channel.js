@@ -1,23 +1,26 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
+const { PermissionFlagsBits } = require("discord.js");
 const { readLevels, writeLevels } = require("../../lib/leveling");
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName("set-level-channel")
-    .setDescription("Set channel for level up messages")
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
-    .addChannelOption(o => o.setName("channel").setDescription("Channel").setRequired(true)),
+  name: "set-level-channel",
+  category: "Leveling",
+  aliases: ["level-channel"],
 
-  async execute(interaction) {
-    const channel = interaction.options.getChannel("channel");
+  async execute(message) {
+    if (!message.member.permissions.has(PermissionFlagsBits.ManageGuild)) {
+      return message.reply("❌ You need Manage Server to use this command.");
+    }
 
-    const data = readLevels(interaction.guildId);
-    data.levelChannelId = channel.id;
-    writeLevels(interaction.guildId, data);
+    const channel = message.mentions.channels.first();
+    if (!channel) {
+      return message.reply("❌ Mention a channel. Example: `!set-level-channel #levels`.");
+    }
 
-    await interaction.reply({
-      content: `✅ Level up messages will go to ${channel}`,
-      ephemeral: true,
-    });
+    const data = readLevels(message.guild.id);
+    data.settings ||= {};
+    data.settings.levelChannelId = channel.id;
+    writeLevels(message.guild.id, data);
+
+    await message.reply(`✅ Level up messages will go to ${channel}`);
   },
 };
