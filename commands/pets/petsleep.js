@@ -1,36 +1,60 @@
-const { readEcon, writeEcon, ensureUser } = require("../../lib/economy");
+const {
+  ActionRowBuilder,
+  StringSelectMenuBuilder,
+} = require("discord.js");
+const { readPets, writePets, getUserPets, findPet, addXp } = require("../../lib/pets");
 
 module.exports = {
   name: "petsleep",
   category: "Pets",
   aliases: ["petrest"],
 
-  async execute(message) {
-    const data = readEcon(message.guild.id);
-    const u = ensureUser(data, message.author.id);
+  async execute(message, args) {
+    const data = readPets(message.guild.id);
+    const pets = getUserPets(data, message.author.id);
 
-    if (!u.pet) return message.reply("❌ You do not have a pet.");
-    if (!u.pet.alive) return message.reply("💀 Your pet is dead. Use `!petrevive`.");
+    if (!pets.length) return message.reply("❌ You do not have any pets.");
+
+    const petId = args[0];
+    if (!petId) {
+      const alivePets = pets.filter((p) => p.alive);
+      if (!alivePets.length) return message.reply("❌ You have no alive pets.");
+
+      const menu = new StringSelectMenuBuilder()
+        .setCustomId(`petsleep:${message.author.id}`)
+        .setPlaceholder("Choose a pet to sleep")
+        .addOptions(
+          alivePets.slice(0, 25).map((p) => ({
+            label: `${p.nickname} (${p.type})`,
+            value: p.id,
+            description: `HP ${p.hp}/${p.maxHp}`,
+          }))
+        );
+
+      return message.reply({
+        content: "😴 Choose a pet to sleep:",
+        components: [new ActionRowBuilder().addComponents(menu)],
+      });
+    }
+
+    const pet = findPet(data, message.author.id, petId);
+    if (!pet) return message.reply("❌ Pet not found.");
+    if (!pet.alive) return message.reply("💀 That pet is dead.");
 
     const now = Date.now();
     const cooldown = 60 * 60 * 1000;
-    const lastSleep = Number(u.pet.lastSleep || 0);
-
-    if (now - lastSleep < cooldown) {
-      const mins = Math.ceil((cooldown - (now - lastSleep)) / 60000);
-      return message.reply(`😴 Your pet is not tired yet. Try again in **${mins} min**.`);
+    if (now - (pet.lastSleep || 0) < cooldown) {
+      const mins = Math.ceil((cooldown - (now - pet.lastSleep)) / 60000);
+      return message.reply(`😴 ${pet.nickname} is not tired yet. Try again in **${mins} min**.`);
     }
 
-    u.pet.lastSleep = now;
-    u.pet.hp = Math.min(u.pet.maxHp || 100, (u.pet.hp || 0) + 20);
-    u.pet.food = Math.max(0, (u.pet.food || 0) - 10);
-    u.pet.water = Math.max(0, (u.pet.water || 0) - 10);
-    u.pet.xp = (u.pet.xp || 0) + 10;
+    pet.lastSleep = now;
+    pet.hp = Math.min(pet.maxHp, pet.hp + 20);
+    pet.food = Math.max(0, pet.food - 10);
+    pet.water = Math.max(0, pet.water - 10);
+    addXp(pet, 10);
 
-    writeEcon(message.guild.id, data);
-
-    return message.reply(
-      `😴 Your **${u.pet.type}** had a nice sleep.\nHP: **${u.pet.hp}/${u.pet.maxHp}**`
-    );
+    writePets(message.guild.id, data);
+    return message.reply(`😴 **${pet.nickname}** slept and now has **${pet.hp}/${pet.maxHp} HP**.`);
   },
 };
