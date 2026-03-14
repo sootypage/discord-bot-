@@ -1,32 +1,35 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
-const { getConfig } = require("../lib/config");
-const { sendModLog } = require("../lib/modlog");
+const { PermissionFlagsBits } = require("discord.js");
+const { getConfig } = require("../../lib/config");
+const { sendModLog } = require("../../lib/modlog");
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName("untimeout")
-    .setDescription("Remove timeout from a member")
-    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
-    .addUserOption(opt => opt.setName("user").setDescription("User to untimeout").setRequired(true))
-    .addStringOption(opt => opt.setName("reason").setDescription("Reason").setRequired(false)),
+  name: "untimeout",
+  category: "Moderation",
+  aliases: ["unmute"],
 
-  async execute(interaction) {
-    const user = interaction.options.getUser("user");
-    const reason = interaction.options.getString("reason") ?? "No reason provided";
+  async execute(message, args) {
+    if (!message.member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
+      return message.reply("❌ You do not have permission to remove timeouts.");
+    }
 
-    const member = await interaction.guild.members.fetch(user.id).catch(() => null);
-    if (!member) return interaction.reply({ content: "❌ I can’t find that member.", ephemeral: true });
-    if (!member.moderatable) return interaction.reply({ content: "❌ I can’t edit that user (role hierarchy / permissions).", ephemeral: true });
+    const user = message.mentions.users.first();
+    const reason = args.slice(1).join(" ").trim() || "No reason provided";
+
+    if (!user) return message.reply("❌ Mention a user to untimeout.");
+
+    const member = await message.guild.members.fetch(user.id).catch(() => null);
+    if (!member) return message.reply("❌ I can’t find that member.");
+    if (!member.moderatable) return message.reply("❌ I can’t edit that user (role hierarchy / permissions).");
 
     await member.timeout(null, reason);
 
-    const cfg = getConfig(interaction.guildId);
+    const cfg = getConfig(message.guild.id);
     await sendModLog({
-      guild: interaction.guild,
+      guild: message.guild,
       channelId: cfg.modLogChannelId,
-      content: `✅ **Untimeout** — ${user.tag} (${user.id})\nBy: ${interaction.user.tag}\nReason: ${reason}`
+      content: `✅ **Untimeout** — ${user.tag} (${user.id})\nBy: ${message.author.tag}\nReason: ${reason}`,
     });
 
-    await interaction.reply({ content: `✅ Removed timeout from ${user.tag}`, ephemeral: true });
+    await message.reply(`✅ Removed timeout from ${user.tag}`);
   },
 };

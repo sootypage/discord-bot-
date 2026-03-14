@@ -1,20 +1,24 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
-const { getConfig } = require("../lib/config");
+const { PermissionFlagsBits } = require("discord.js");
+const { getConfig } = require("../../lib/config");
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName("warnings")
-    .setDescription("View warnings for a user")
-    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
-    .addUserOption(opt => opt.setName("user").setDescription("User to view").setRequired(true)),
+  name: "warnings",
+  category: "Moderation",
+  aliases: [],
 
-  async execute(interaction) {
-    const user = interaction.options.getUser("user");
-    const cfg = getConfig(interaction.guildId);
+  async execute(message) {
+    if (!message.member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
+      return message.reply("❌ You do not have permission to view warnings.");
+    }
 
-    const list = (cfg.warnings && cfg.warnings[user.id]) ? cfg.warnings[user.id] : [];
+    const user = message.mentions.users.first();
+    if (!user) return message.reply("❌ Mention a user to view warnings for.");
+
+    const cfg = getConfig(message.guild.id);
+    const list = cfg.warnings?.[user.id] || [];
+
     if (list.length === 0) {
-      return interaction.reply({ content: `✅ ${user.tag} has no warnings.`, ephemeral: true });
+      return message.reply(`✅ ${user.tag} has no warnings.`);
     }
 
     const lines = list.slice(-10).map((w, i) => {
@@ -22,10 +26,9 @@ module.exports = {
       return `${list.length - (Math.min(10, list.length) - 1 - i)}. ${d} — ${w.reason} (by <@${w.by}>)`;
     });
 
-    await interaction.reply({
-      content: `⚠️ **Warnings for ${user.tag}** (showing last ${Math.min(10, list.length)} of ${list.length})\n` +
-        "```" + lines.join("\n") + "```",
-      ephemeral: true
-    });
+    await message.reply(
+      `⚠️ **Warnings for ${user.tag}** (showing last ${Math.min(10, list.length)} of ${list.length})\n` +
+      "```" + lines.join("\n") + "```"
+    );
   },
 };

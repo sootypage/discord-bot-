@@ -1,36 +1,44 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
-const { getConfig } = require("../lib/config");
-const { sendModLog } = require("../lib/modlog");
+const { PermissionFlagsBits } = require("discord.js");
+const { getConfig } = require("../../lib/config");
+const { sendModLog } = require("../../lib/modlog");
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName("ban")
-    .setDescription("Ban a user")
-    .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers)
-    .addUserOption(opt => opt.setName("user").setDescription("User to ban").setRequired(true))
-    .addStringOption(opt => opt.setName("reason").setDescription("Reason").setRequired(false))
-    .addIntegerOption(opt => opt.setName("delete_days").setDescription("Delete message history (0-7 days)").setMinValue(0).setMaxValue(7).setRequired(false)),
+  name: "ban",
+  category: "Moderation",
+  aliases: [],
 
-  async execute(interaction) {
-    const user = interaction.options.getUser("user");
-    const reason = interaction.options.getString("reason") ?? "No reason provided";
-    const deleteDays = interaction.options.getInteger("delete_days") ?? 0;
-
-    // Try fetch member if in guild (for hierarchy checks)
-    const member = await interaction.guild.members.fetch(user.id).catch(() => null);
-    if (member && !member.bannable) {
-      return interaction.reply({ content: "❌ I can’t ban that user (role hierarchy / permissions).", ephemeral: true });
+  async execute(message, args) {
+    if (!message.member.permissions.has(PermissionFlagsBits.BanMembers)) {
+      return message.reply("❌ You do not have permission to ban members.");
     }
 
-    await interaction.guild.members.ban(user.id, { reason, deleteMessageSeconds: deleteDays * 24 * 60 * 60 });
+    const user = message.mentions.users.first();
+    if (!user) {
+      return message.reply("❌ Mention a user to ban.");
+    }
 
-    const cfg = getConfig(interaction.guildId);
-    await sendModLog({
-      guild: interaction.guild,
-      channelId: cfg.modLogChannelId,
-      content: `🔨 **Ban** — ${user.tag} (${user.id})\nBy: ${interaction.user.tag}\nReason: ${reason}\nDelete days: ${deleteDays}`
+    const member = await message.guild.members.fetch(user.id).catch(() => null);
+    const deleteDaysRaw = args.find((a) => /^\d+$/.test(a));
+    const deleteDays = Math.max(0, Math.min(7, Number(deleteDaysRaw || 0)));
+    const reasonParts = args.filter((a, i) => i !== 0 && a !== deleteDaysRaw);
+    const reason = reasonParts.join(" ").trim() || "No reason provided";
+
+    if (member && !member.bannable) {
+      return message.reply("❌ I can’t ban that user (role hierarchy / permissions).");
+    }
+
+    await message.guild.members.ban(user.id, {
+      reason,
+      deleteMessageSeconds: deleteDays * 24 * 60 * 60,
     });
 
-    await interaction.reply({ content: `✅ Banned ${user.tag}`, ephemeral: true });
+    const cfg = getConfig(message.guild.id);
+    await sendModLog({
+      guild: message.guild,
+      channelId: cfg.modLogChannelId,
+      content: `🔨 **Ban** — ${user.tag} (${user.id})\nBy: ${message.author.tag}\nReason: ${reason}\nDelete days: ${deleteDays}`,
+    });
+
+    await message.reply(`✅ Banned ${user.tag}`);
   },
 };

@@ -1,36 +1,39 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
-const { getConfig } = require("../lib/config");
-const { sendModLog } = require("../lib/modlog");
+const { PermissionFlagsBits } = require("discord.js");
+const { getConfig } = require("../../lib/config");
+const { sendModLog } = require("../../lib/modlog");
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName("kick")
-    .setDescription("Kick a member")
-    .setDefaultMemberPermissions(PermissionFlagsBits.KickMembers)
-    .addUserOption(opt => opt.setName("user").setDescription("User to kick").setRequired(true))
-    .addStringOption(opt => opt.setName("reason").setDescription("Reason").setRequired(false)),
+  name: "kick",
+  category: "Moderation",
+  aliases: [],
 
-  async execute(interaction) {
-    const user = interaction.options.getUser("user");
-    const reason = interaction.options.getString("reason") ?? "No reason provided";
-    const member = await interaction.guild.members.fetch(user.id).catch(() => null);
+  async execute(message, args) {
+    if (!message.member.permissions.has(PermissionFlagsBits.KickMembers)) {
+      return message.reply("❌ You do not have permission to kick members.");
+    }
+
+    const user = message.mentions.users.first();
+    if (!user) return message.reply("❌ Mention a user to kick.");
+
+    const reason = args.slice(1).join(" ").trim() || "No reason provided";
+    const member = await message.guild.members.fetch(user.id).catch(() => null);
 
     if (!member) {
-      return interaction.reply({ content: "❌ I can’t find that member in this server.", ephemeral: true });
+      return message.reply("❌ I can’t find that member in this server.");
     }
     if (!member.kickable) {
-      return interaction.reply({ content: "❌ I can’t kick that user (role hierarchy / permissions).", ephemeral: true });
+      return message.reply("❌ I can’t kick that user (role hierarchy / permissions).");
     }
 
     await member.kick(reason);
 
-    const cfg = getConfig(interaction.guildId);
+    const cfg = getConfig(message.guild.id);
     await sendModLog({
-      guild: interaction.guild,
+      guild: message.guild,
       channelId: cfg.modLogChannelId,
-      content: `👢 **Kick** — ${user.tag} (${user.id})\nBy: ${interaction.user.tag}\nReason: ${reason}`
+      content: `👢 **Kick** — ${user.tag} (${user.id})\nBy: ${message.author.tag}\nReason: ${reason}`,
     });
 
-    await interaction.reply({ content: `✅ Kicked ${user.tag}`, ephemeral: true });
+    await message.reply(`✅ Kicked ${user.tag}`);
   },
 };

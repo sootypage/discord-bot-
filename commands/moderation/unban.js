@@ -1,32 +1,33 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
-const { getConfig } = require("../lib/config");
-const { sendModLog } = require("../lib/modlog");
+const { PermissionFlagsBits } = require("discord.js");
+const { getConfig } = require("../../lib/config");
+const { sendModLog } = require("../../lib/modlog");
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName("unban")
-    .setDescription("Unban a user by ID")
-    .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers)
-    .addStringOption(opt => opt.setName("user_id").setDescription("User ID to unban").setRequired(true))
-    .addStringOption(opt => opt.setName("reason").setDescription("Reason").setRequired(false)),
+  name: "unban",
+  category: "Moderation",
+  aliases: [],
 
-  async execute(interaction) {
-    const userId = interaction.options.getString("user_id");
-    const reason = interaction.options.getString("reason") ?? "No reason provided";
-
-    if (!/^\d{17,20}$/.test(userId)) {
-      return interaction.reply({ content: "❌ That doesn’t look like a valid user ID.", ephemeral: true });
+  async execute(message, args) {
+    if (!message.member.permissions.has(PermissionFlagsBits.BanMembers)) {
+      return message.reply("❌ You do not have permission to unban members.");
     }
 
-    await interaction.guild.members.unban(userId, reason);
+    const userId = String(args[0] || "");
+    const reason = args.slice(1).join(" ").trim() || "No reason provided";
 
-    const cfg = getConfig(interaction.guildId);
+    if (!/^\d{17,20}$/.test(userId)) {
+      return message.reply("❌ That doesn’t look like a valid user ID.");
+    }
+
+    await message.guild.members.unban(userId, reason);
+
+    const cfg = getConfig(message.guild.id);
     await sendModLog({
-      guild: interaction.guild,
+      guild: message.guild,
       channelId: cfg.modLogChannelId,
-      content: `✅ **Unban** — ${userId}\nBy: ${interaction.user.tag}\nReason: ${reason}`
+      content: `✅ **Unban** — ${userId}\nBy: ${message.author.tag}\nReason: ${reason}`,
     });
 
-    await interaction.reply({ content: `✅ Unbanned **${userId}**`, ephemeral: true });
+    await message.reply(`✅ Unbanned **${userId}**`);
   },
 };

@@ -1,21 +1,25 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
-const { getConfig, saveConfig } = require("../lib/config");
+const { PermissionFlagsBits } = require("discord.js");
+const { getConfig, saveConfig } = require("../../lib/config");
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName("modlog-channel")
-    .setDescription("Set the moderation log channel")
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
-    .addChannelOption(opt =>
-      opt.setName("channel").setDescription("Channel for mod logs").setRequired(true)
-    ),
+  name: "modlog-channel",
+  category: "Moderation",
+  aliases: ["set-modlog"],
 
-  async execute(interaction) {
-    const channel = interaction.options.getChannel("channel");
-    const cfg = getConfig(interaction.guildId);
+  async execute(message) {
+    if (!message.member.permissions.has(PermissionFlagsBits.ManageGuild)) {
+      return message.reply("❌ You need Manage Server to use this command.");
+    }
+
+    const channel = message.mentions.channels.first();
+    if (!channel) {
+      return message.reply("❌ Mention a channel. Example: `!modlog-channel #modlog`.");
+    }
+
+    const cfg = getConfig(message.guild.id);
     cfg.modLogChannelId = channel.id;
-    saveConfig(interaction.guildId, cfg);
+    saveConfig(message.guild.id, cfg);
 
-    await interaction.reply({ content: `✅ Mod log channel set to ${channel}`, ephemeral: true });
+    await message.reply(`✅ Mod log channel set to ${channel}`);
   },
 };

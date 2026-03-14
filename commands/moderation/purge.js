@@ -1,34 +1,37 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
-const { getConfig } = require("../lib/config");
-const { sendModLog } = require("../lib/modlog");
+const { PermissionFlagsBits } = require("discord.js");
+const { getConfig } = require("../../lib/config");
+const { sendModLog } = require("../../lib/modlog");
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName("purge")
-    .setDescription("Delete a number of messages from this channel")
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
-    .addIntegerOption(opt =>
-      opt.setName("amount").setDescription("1-100").setMinValue(1).setMaxValue(100).setRequired(true)
-    )
-    .addStringOption(opt => opt.setName("reason").setDescription("Reason").setRequired(false)),
+  name: "purge",
+  category: "Moderation",
+  aliases: ["clear"],
 
-  async execute(interaction) {
-    const amount = interaction.options.getInteger("amount");
-    const reason = interaction.options.getString("reason") ?? "No reason provided";
+  async execute(message, args) {
+    if (!message.member.permissions.has(PermissionFlagsBits.ManageMessages)) {
+      return message.reply("❌ You do not have permission to purge messages.");
+    }
 
-    // must be done fast for interactions; also requires bot perms
-    await interaction.deferReply({ ephemeral: true });
+    const amount = Number(args[0]);
+    const reason = args.slice(1).join(" ").trim() || "No reason provided";
 
-    const deleted = await interaction.channel.bulkDelete(amount, true).catch(() => null);
-    if (!deleted) return interaction.editReply("❌ I couldn’t delete messages (permissions or messages too old).");
+    if (!Number.isInteger(amount) || amount < 1 || amount > 100) {
+      return message.reply("❌ Give an amount between 1 and 100.");
+    }
 
-    const cfg = getConfig(interaction.guildId);
+    const deleted = await message.channel.bulkDelete(amount, true).catch(() => null);
+    if (!deleted) {
+      return message.reply("❌ I couldn’t delete messages (permissions or messages too old).");
+    }
+
+    const cfg = getConfig(message.guild.id);
     await sendModLog({
-      guild: interaction.guild,
+      guild: message.guild,
       channelId: cfg.modLogChannelId,
-      content: `🧹 **Purge** — ${deleted.size} messages in #${interaction.channel.name}\nBy: ${interaction.user.tag}\nReason: ${reason}`
+      content: `🧹 **Purge** — ${deleted.size} messages in #${message.channel.name}\nBy: ${message.author.tag}\nReason: ${reason}`,
     });
 
-    await interaction.editReply(`✅ Deleted **${deleted.size}** messages.`);
+    const reply = await message.channel.send(`✅ Deleted **${deleted.size}** messages.`);
+    setTimeout(() => reply.delete().catch(() => {}), 3000);
   },
 };

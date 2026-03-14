@@ -1,52 +1,53 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
-const { getConfig } = require("../lib/config");
-const { sendModLog } = require("../lib/modlog");
+const { PermissionFlagsBits } = require("discord.js");
+const { getConfig } = require("../../lib/config");
+const { sendModLog } = require("../../lib/modlog");
 
 function parseDuration(input) {
-  // supports: 10m, 2h, 3d, 30s
-  const m = /^(\d+)\s*([smhd])$/i.exec(input);
+  const m = /^(\d+)\s*([smhd])$/i.exec(input || "");
   if (!m) return null;
   const n = Number(m[1]);
   const unit = m[2].toLowerCase();
-  const mult = { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 }[unit];
+  const mult = { s: 1000, m: 60000, h: 3600000, d: 86400000 }[unit];
   const ms = n * mult;
-  // Discord max timeout is 28 days
-  if (ms < 1000 || ms > 28 * 86_400_000) return null;
+  if (ms < 1000 || ms > 28 * 86400000) return null;
   return ms;
 }
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName("timeout")
-    .setDescription("Timeout a member")
-    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
-    .addUserOption(opt => opt.setName("user").setDescription("User to timeout").setRequired(true))
-    .addStringOption(opt => opt.setName("duration").setDescription("e.g. 10m, 2h, 3d").setRequired(true))
-    .addStringOption(opt => opt.setName("reason").setDescription("Reason").setRequired(false)),
+  name: "timeout",
+  category: "Moderation",
+  aliases: ["mute"],
 
-  async execute(interaction) {
-    const user = interaction.options.getUser("user");
-    const durationStr = interaction.options.getString("duration");
-    const reason = interaction.options.getString("reason") ?? "No reason provided";
+  async execute(message, args) {
+    if (!message.member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
+      return message.reply("❌ You do not have permission to timeout members.");
+    }
 
-    const member = await interaction.guild.members.fetch(user.id).catch(() => null);
-    if (!member) return interaction.reply({ content: "❌ I can’t find that member.", ephemeral: true });
-    if (!member.moderatable) return interaction.reply({ content: "❌ I can’t timeout that user (role hierarchy / permissions).", ephemeral: true });
+    const user = message.mentions.users.first();
+    const durationStr = args[1];
+    const reason = args.slice(2).join(" ").trim() || "No reason provided";
+
+    if (!user) return message.reply("❌ Mention a user to timeout.");
+    if (!durationStr) return message.reply("❌ Use `!timeout @user 10m [reason]`.");
+
+    const member = await message.guild.members.fetch(user.id).catch(() => null);
+    if (!member) return message.reply("❌ I can’t find that member.");
+    if (!member.moderatable) return message.reply("❌ I can’t timeout that user (role hierarchy / permissions).");
 
     const ms = parseDuration(durationStr);
     if (!ms) {
-      return interaction.reply({ content: "❌ Invalid duration. Use like `10m`, `2h`, `3d` (max 28d).", ephemeral: true });
+      return message.reply("❌ Invalid duration. Use like `10m`, `2h`, `3d` (max 28d).");
     }
 
     await member.timeout(ms, reason);
 
-    const cfg = getConfig(interaction.guildId);
+    const cfg = getConfig(message.guild.id);
     await sendModLog({
-      guild: interaction.guild,
+      guild: message.guild,
       channelId: cfg.modLogChannelId,
-      content: `⏳ **Timeout** — ${user.tag} (${user.id})\nBy: ${interaction.user.tag}\nDuration: ${durationStr}\nReason: ${reason}`
+      content: `⏳ **Timeout** — ${user.tag} (${user.id})\nBy: ${message.author.tag}\nDuration: ${durationStr}\nReason: ${reason}`,
     });
 
-    await interaction.reply({ content: `✅ Timed out ${user.tag} for ${durationStr}`, ephemeral: true });
+    await message.reply(`✅ Timed out ${user.tag} for ${durationStr}`);
   },
 };
