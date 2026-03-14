@@ -1,4 +1,4 @@
-const { readEconomy, writeEconomy } = require("../../lib/economy");
+const { readEcon, writeEcon, ensureUser, formatMoney } = require("../../lib/economy");
 
 module.exports = {
   name: "petrevive",
@@ -6,27 +6,27 @@ module.exports = {
   aliases: ["petrelive"],
 
   async execute(message) {
-    const data = readEconomy(message.guild.id);
-    const user = data.users?.[message.author.id];
+    const data = readEcon(message.guild.id);
+    const u = ensureUser(data, message.author.id);
 
-    if (!user?.pet) return message.reply("❌ You do not have a pet.");
-    if (user.pet.alive) return message.reply("✅ Your pet is already alive.");
+    if (!u.pet) return message.reply("❌ You do not have a pet.");
+    if (u.pet.alive) return message.reply("✅ Your pet is already alive.");
 
     const cost = 250;
-    if ((user.balance || 0) < cost) {
-      return message.reply(`❌ You need **${cost}** coins to revive your pet.`);
+    if (u.wallet < cost) {
+      return message.reply(`❌ You need **${formatMoney(cost)}** coins to revive your pet.`);
     }
 
-    user.balance -= cost;
-    user.pet.alive = true;
-    user.pet.hp = Math.max(25, Math.floor((user.pet.maxHp || 100) / 2));
-    user.pet.food = Math.max(25, user.pet.food || 0);
-    user.pet.water = Math.max(25, user.pet.water || 0);
+    u.wallet -= cost;
+    u.pet.alive = true;
+    u.pet.hp = Math.max(25, Math.floor((u.pet.maxHp || 100) / 2));
+    u.pet.food = Math.max(25, u.pet.food || 0);
+    u.pet.water = Math.max(25, u.pet.water || 0);
 
-    writeEconomy(message.guild.id, data);
+    writeEcon(message.guild.id, data);
 
     return message.reply(
-      `✨ Your **${user.pet.name}** has been revived for **${cost}** coins.\nHP: **${user.pet.hp}/${user.pet.maxHp}**`
+      `✨ Your **${u.pet.type}** has been revived for **${formatMoney(cost)}** coins.\nHP: **${u.pet.hp}/${u.pet.maxHp}**`
     );
   },
 };
