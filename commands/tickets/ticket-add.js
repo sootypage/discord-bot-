@@ -1,24 +1,27 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
+const { PermissionFlagsBits } = require("discord.js");
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName("ticket-add")
-    .setDescription("Add a user to this ticket")
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
-    .addUserOption(o => o.setName("user").setDescription("User to add").setRequired(true)),
+  name: "ticket-add",
+  category: "Tickets",
+  aliases: [],
 
-  async execute(interaction) {
-    const user = interaction.options.getUser("user");
-    if (!interaction.channel?.topic?.includes("Ticket #")) {
-      return interaction.reply({ content: "❌ This isn’t a ticket channel.", ephemeral: true });
+  async execute(message) {
+    if (!message.member.permissions.has(PermissionFlagsBits.ManageChannels)) {
+      return message.reply("❌ You need Manage Channels to use this command.");
     }
 
-    await interaction.channel.permissionOverwrites.edit(user.id, {
+    const user = message.mentions.users.first();
+    if (!user) return message.reply("❌ Mention a user to add.");
+    if (!message.channel?.topic?.includes("Ticket #")) {
+      return message.reply("❌ This isn’t a ticket channel.");
+    }
+
+    await message.channel.permissionOverwrites.edit(user.id, {
       ViewChannel: true,
       SendMessages: true,
       ReadMessageHistory: true,
     });
 
-    await interaction.reply({ content: `✅ Added ${user} to this ticket.`, ephemeral: true });
+    await message.reply(`✅ Added ${user} to this ticket.`);
   },
 };

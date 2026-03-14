@@ -1,40 +1,38 @@
 const {
-  SlashCommandBuilder,
   PermissionFlagsBits,
   ActionRowBuilder,
   StringSelectMenuBuilder,
   EmbedBuilder,
-  ChannelType,
 } = require("discord.js");
 const store = require("../../tickets/ticketStore");
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName("ticket-panel")
-    .setDescription("Admin: send the ticket dropdown panel")
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
-    .addChannelOption(o =>
-      o.setName("channel")
-        .setDescription("Where to send the panel")
-        .addChannelTypes(ChannelType.GuildText)
-        .setRequired(true)
-    ),
+  name: "ticket-panel",
+  category: "Tickets",
+  aliases: [],
 
-  async execute(interaction) {
-    const channel = interaction.options.getChannel("channel");
-    const data = store.read(interaction.guildId);
-
-    if (!data.settings.categoryChannelId) {
-      return interaction.reply({ content: "❌ Run `/ticket-setup` first.", ephemeral: true });
+  async execute(message) {
+    if (!message.member.permissions.has(PermissionFlagsBits.ManageGuild)) {
+      return message.reply("❌ You need Manage Server to use this command.");
     }
 
-    const types = data.settings.ticketTypes.slice(0, 25);
+    const channel = message.mentions.channels.first() || message.channel;
+    const data = store.read(message.guild.id);
+
+    if (!data.settings.categoryChannelId) {
+      return message.reply("❌ Run `!ticket-setup` first.");
+    }
+
+    const types = (data.settings.ticketTypes || []).slice(0, 25);
+    if (!types.length) {
+      return message.reply("❌ No ticket types were found in your ticket settings.");
+    }
 
     const menu = new StringSelectMenuBuilder()
       .setCustomId("ticket_type_select")
       .setPlaceholder("Open a ticket…")
       .addOptions(
-        types.map(t => ({
+        types.map((t) => ({
           label: t.label,
           value: t.id,
           description: t.description?.slice(0, 100) || "Open a ticket",
@@ -50,6 +48,6 @@ module.exports = {
       components: [new ActionRowBuilder().addComponents(menu)],
     });
 
-    await interaction.reply({ content: `✅ Ticket panel sent to ${channel}`, ephemeral: true });
+    await message.reply(`✅ Ticket panel sent to ${channel}`);
   },
 };

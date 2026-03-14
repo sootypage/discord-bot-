@@ -1,27 +1,30 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
+const { PermissionFlagsBits } = require("discord.js");
 const store = require("../../tickets/ticketStore");
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName("ticket-close")
-    .setDescription("Close the current ticket")
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
+  name: "ticket-close",
+  category: "Tickets",
+  aliases: ["close-ticket"],
 
-  async execute(interaction) {
-    const data = store.read(interaction.guildId);
-    const isTicketChannel = interaction.channel?.topic?.includes("Ticket #");
-    if (!isTicketChannel) return interaction.reply({ content: "❌ This isn’t a ticket channel.", ephemeral: true });
+  async execute(message) {
+    const data = store.read(message.guild.id);
+    const isTicketChannel = message.channel?.topic?.includes("Ticket #");
+    if (!isTicketChannel) return message.reply("❌ This isn’t a ticket channel.");
 
-    const ownerId = Object.keys(data.openTickets).find((uid) => data.openTickets[uid]?.channelId === interaction.channelId);
-    const isOwner = ownerId === interaction.user.id;
-    const canManage = interaction.memberPermissions?.has(PermissionFlagsBits.ManageChannels);
+    const ownerId = Object.keys(data.openTickets || {}).find(
+      (uid) => data.openTickets[uid]?.channelId === message.channel.id
+    );
+    const isOwner = ownerId === message.author.id;
+    const canManage = message.member.permissions.has(PermissionFlagsBits.ManageChannels);
 
-    if (!isOwner && !canManage) return interaction.reply({ content: "❌ Only the owner or staff can close this ticket.", ephemeral: true });
+    if (!isOwner && !canManage) {
+      return message.reply("❌ Only the owner or staff can close this ticket.");
+    }
 
     if (ownerId) delete data.openTickets[ownerId];
-    store.write(interaction.guildId, data);
+    store.write(message.guild.id, data);
 
-    await interaction.reply({ content: "✅ Closing ticket in 3 seconds…", ephemeral: true });
-    setTimeout(() => interaction.channel.delete("Ticket closed").catch(() => {}), 3000);
+    await message.reply("✅ Closing ticket in 3 seconds…");
+    setTimeout(() => message.channel.delete().catch(() => {}), 3000);
   },
 };

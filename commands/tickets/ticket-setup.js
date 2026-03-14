@@ -1,36 +1,31 @@
-const { SlashCommandBuilder, PermissionFlagsBits, ChannelType } = require("discord.js");
+const { PermissionFlagsBits } = require("discord.js");
 const store = require("../../tickets/ticketStore");
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName("ticket-setup")
-    .setDescription("Admin: configure tickets")
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
-    .addChannelOption(o =>
-      o.setName("category")
-        .setDescription("Category channel to create tickets under")
-        .addChannelTypes(ChannelType.GuildCategory)
-        .setRequired(true)
-    )
-    .addRoleOption(o => o.setName("support_role").setDescription("Role that can view tickets").setRequired(false))
-    .addChannelOption(o =>
-      o.setName("log_channel")
-        .setDescription("Optional log channel")
-        .addChannelTypes(ChannelType.GuildText)
-        .setRequired(false)
-    ),
+  name: "ticket-setup",
+  category: "Tickets",
+  aliases: [],
 
-  async execute(interaction) {
-    const category = interaction.options.getChannel("category");
-    const supportRole = interaction.options.getRole("support_role");
-    const logChannel = interaction.options.getChannel("log_channel");
+  async execute(message) {
+    if (!message.member.permissions.has(PermissionFlagsBits.ManageGuild)) {
+      return message.reply("❌ You need Manage Server to use this command.");
+    }
 
-    const data = store.read(interaction.guildId);
+    const category = message.mentions.channels.first();
+    const role = message.mentions.roles.first();
+    const channelMentions = [...message.mentions.channels.values()];
+    const logChannel = channelMentions[1] || null;
+
+    if (!category) {
+      return message.reply("❌ Use `!ticket-setup #category [@supportRole] [#logChannel]`.");
+    }
+
+    const data = store.read(message.guild.id);
     data.settings.categoryChannelId = category.id;
-    data.settings.supportRoleId = supportRole?.id ?? null;
+    data.settings.supportRoleId = role?.id ?? null;
     data.settings.logChannelId = logChannel?.id ?? null;
-    store.write(interaction.guildId, data);
+    store.write(message.guild.id, data);
 
-    await interaction.reply({ content: "✅ Ticket system configured.", ephemeral: true });
+    await message.reply("✅ Ticket system configured.");
   },
 };
