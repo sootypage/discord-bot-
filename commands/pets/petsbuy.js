@@ -1,10 +1,5 @@
 const { readEcon, writeEcon, ensureUser, formatMoney } = require("../../lib/economy");
-
-const PETS = {
-  dog: { price: 500, hp: 100, food: 100, water: 100, xp: 0, level: 1 },
-  cat: { price: 450, hp: 90, food: 100, water: 100, xp: 0, level: 1 },
-  dragon: { price: 5000, hp: 250, food: 100, water: 100, xp: 0, level: 1 },
-};
+const { readPets, writePets, ensureUserPets, getPetTypes, createPet } = require("../../lib/pets");
 
 module.exports = {
   name: "petsbuy",
@@ -13,48 +8,33 @@ module.exports = {
 
   async execute(message, args) {
     const type = String(args[0] || "").toLowerCase();
+    const nickname = args.slice(1).join(" ").trim();
+    const petTypes = getPetTypes();
 
-    if (!type || !PETS[type]) {
-      return message.reply("Usage: !petsbuy <dog|cat|dragon>");
+    if (!petTypes[type]) {
+      return message.reply("Usage: `!petsbuy <dog|cat|dragon> [nickname]`");
     }
 
-    const data = readEcon(message.guild.id);
-    const u = ensureUser(data, message.author.id);
+    const econ = readEcon(message.guild.id);
+    const u = ensureUser(econ, message.author.id);
 
-    if (u.pet) {
-      return message.reply("❌ You already have a pet.");
+    const petsData = readPets(message.guild.id);
+    ensureUserPets(petsData, message.author.id);
+
+    const price = petTypes[type].price;
+    if (u.wallet < price) {
+      return message.reply(`❌ You need **$${formatMoney(price)}** to buy that pet.`);
     }
 
-    const petTemplate = PETS[type];
+    u.wallet -= price;
+    const pet = createPet(type, nickname);
+    petsData.users[message.author.id].pets.push(pet);
 
-    if (u.wallet < petTemplate.price) {
-      return message.reply(
-        `❌ You need **${formatMoney(petTemplate.price)}** coins to buy a **${type}**.`
-      );
-    }
-
-    u.wallet -= petTemplate.price;
-    u.pet = {
-      type,
-      hp: petTemplate.hp,
-      maxHp: petTemplate.hp,
-      food: petTemplate.food,
-      water: petTemplate.water,
-      xp: petTemplate.xp,
-      level: petTemplate.level,
-      alive: true,
-      wins: 0,
-      losses: 0,
-      lastSleep: 0,
-      lastFeed: 0,
-      lastWater: 0,
-      lastBattle: 0,
-    };
-
-    writeEcon(message.guild.id, data);
+    writeEcon(message.guild.id, econ);
+    writePets(message.guild.id, petsData);
 
     return message.reply(
-      `🐾 You bought a **${type}** for **${formatMoney(petTemplate.price)}** coins.`
+      `🐾 You bought a **${type}** named **${pet.nickname}** for **$${formatMoney(price)}**.`
     );
   },
 };
