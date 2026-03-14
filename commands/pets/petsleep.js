@@ -1,36 +1,36 @@
-const { readEconomy, writeEconomy } = require("../../lib/economy");
+const { readEcon, writeEcon, ensureUser } = require("../../lib/economy");
 
 module.exports = {
   name: "petsleep",
   category: "Pets",
-  aliases: ["petsrest", "petrest"],
+  aliases: ["petrest"],
 
   async execute(message) {
-    const data = readEconomy(message.guild.id);
-    const user = data.users?.[message.author.id];
+    const data = readEcon(message.guild.id);
+    const u = ensureUser(data, message.author.id);
 
-    if (!user?.pet) return message.reply("❌ You do not have a pet.");
-    if (!user.pet.alive) return message.reply("💀 Your pet is dead. Use `!petrevive`.");
+    if (!u.pet) return message.reply("❌ You do not have a pet.");
+    if (!u.pet.alive) return message.reply("💀 Your pet is dead. Use `!petrevive`.");
 
     const now = Date.now();
-    const cooldown = 60 * 60 * 1000; // 1 hour
-    const lastSleep = Number(user.pet.lastSleep || 0);
+    const cooldown = 60 * 60 * 1000;
+    const lastSleep = Number(u.pet.lastSleep || 0);
 
     if (now - lastSleep < cooldown) {
       const mins = Math.ceil((cooldown - (now - lastSleep)) / 60000);
       return message.reply(`😴 Your pet is not tired yet. Try again in **${mins} min**.`);
     }
 
-    user.pet.lastSleep = now;
-    user.pet.hp = Math.min(user.pet.maxHp || 100, (user.pet.hp || 0) + 20);
-    user.pet.food = Math.max(0, (user.pet.food || 0) - 10);
-    user.pet.water = Math.max(0, (user.pet.water || 0) - 10);
-    user.pet.xp = (user.pet.xp || 0) + 10;
+    u.pet.lastSleep = now;
+    u.pet.hp = Math.min(u.pet.maxHp || 100, (u.pet.hp || 0) + 20);
+    u.pet.food = Math.max(0, (u.pet.food || 0) - 10);
+    u.pet.water = Math.max(0, (u.pet.water || 0) - 10);
+    u.pet.xp = (u.pet.xp || 0) + 10;
 
-    writeEconomy(message.guild.id, data);
+    writeEcon(message.guild.id, data);
 
     return message.reply(
-      `😴 Your **${user.pet.name}** had a nice sleep.\nHP: **${user.pet.hp}/${user.pet.maxHp}**`
+      `😴 Your **${u.pet.type}** had a nice sleep.\nHP: **${u.pet.hp}/${u.pet.maxHp}**`
     );
   },
 };
