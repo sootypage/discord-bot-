@@ -1,27 +1,46 @@
 const { PermissionFlagsBits } = require("discord.js");
-const { readEconomy, writeEconomy } = require("../../lib/economy");
+const {
+  readEcon,
+  writeEcon,
+  addShopItem,
+  formatMoney,
+} = require("../../lib/economy");
 
 module.exports = {
   name: "shopadd",
   category: "Economy",
+  aliases: [],
 
   async execute(message, args) {
-    if (!message.member.permissions.has(PermissionFlagsBits.Administrator))
+    if (!message.member.permissions.has(PermissionFlagsBits.Administrator)) {
       return message.reply("❌ Admin only.");
+    }
 
-    const name = args[0];
+    const id = String(args[0] || "").toLowerCase();
     const price = Number(args[1]);
+    const name = args.slice(2).join(" ").trim();
 
-    if (!name || !price) return message.reply("Usage: !shopadd <item> <price>");
+    if (!id || !price || !name) {
+      return message.reply("Usage: !shopadd <id> <price> <name>");
+    }
 
-    const data = readEconomy(message.guild.id);
+    const data = readEcon(message.guild.id);
 
-    if (!data.shop) data.shop = [];
+    const result = addShopItem(data, {
+      id,
+      name,
+      price,
+      description: "Custom shop item",
+    });
 
-    data.shop.push({ name, price });
+    if (!result.ok) {
+      return message.reply(`❌ ${result.error}`);
+    }
 
-    writeEconomy(message.guild.id, data);
+    writeEcon(message.guild.id, data);
 
-    message.reply(`✅ Added **${name}** to shop for **${price} coins**`);
+    return message.reply(
+      `✅ Added **${name}** (\`${id}\`) to the shop for **${formatMoney(price)}** coins.`
+    );
   },
 };
