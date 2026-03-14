@@ -1,23 +1,30 @@
 const { PermissionFlagsBits } = require("discord.js");
-const { readEconomy, writeEconomy } = require("../../lib/economy");
+const { readEcon, writeEcon, removeShopItem } = require("../../lib/economy");
 
 module.exports = {
   name: "shopremove",
   category: "Economy",
+  aliases: [],
 
   async execute(message, args) {
-    if (!message.member.permissions.has(PermissionFlagsBits.Administrator))
+    if (!message.member.permissions.has(PermissionFlagsBits.Administrator)) {
       return message.reply("❌ Admin only.");
+    }
 
-    const item = args[0];
-    if (!item) return message.reply("Usage: !shopremove <item>");
+    const id = String(args[0] || "").toLowerCase();
+    if (!id) {
+      return message.reply("Usage: !shopremove <id>");
+    }
 
-    const data = readEconomy(message.guild.id);
+    const data = readEcon(message.guild.id);
+    const removed = removeShopItem(data, id);
 
-    data.shop = data.shop.filter(i => i.name !== item);
+    if (!removed) {
+      return message.reply("❌ That item was not found in the shop.");
+    }
 
-    writeEconomy(message.guild.id, data);
+    writeEcon(message.guild.id, data);
 
-    message.reply(`🗑 Removed **${item}** from the shop`);
+    return message.reply(`🗑 Removed \`${id}\` from the shop.`);
   },
 };
